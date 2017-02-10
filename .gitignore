@@ -1,0 +1,17 @@
+*.c~
+*.result
+*.errors
+*.output
+*.d
+*.o
+src/examples/*
+.svn/
+
+.gitignore~
+src/TAGS
+src/threads/build/results
+src/userprog/bochsrc.txt
+src/userprog/build/
+src/userprog/filma035-johja118_lab-1.diff
+src/userprog/filma035-johja118_lab-2.diff
+

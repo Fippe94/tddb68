@@ -29,15 +29,6 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
-/* Creates a list used for sleeping */
- struct list sleep_list;
-
-bool compare(const struct list_elem *a,const struct list_elem *b,void *aux){
-  struct sleeper *t1 = list_entry (a, struct sleeper, elem);
-  struct sleeper *t2 = list_entry (b, struct sleeper, elem);
-  return t1->time_to_wake_up < t2->time_to_wake_up;  
-}
-
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -51,9 +42,8 @@ timer_init (void)
   outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
   outb (0x40, count & 0xff);
   outb (0x40, count >> 8);
-  intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 
-  list_init(&sleep_list);
+  intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -102,43 +92,15 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-void timer_wakeup(void){
-  enum intr_level old_level = intr_disable ();
-  struct list_elem *e;
-  for (e = list_begin (&sleep_list); e != list_end (&sleep_list); ){
-    struct sleeper *sl = list_entry (e, struct sleeper, elem);
-    if (sl->time_to_wake_up <= timer_ticks()){
-      e = list_remove(e);
-      sema_up(sl->s);
-    }
-    else{
-      break;
-    }
-  }  
-  intr_set_level (old_level);
-}
-
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
+
   ASSERT (intr_get_level () == INTR_ON);
-  struct sleeper sl;
-  struct semaphore sema;
-  sema_init(&sema,0);
-  sl.s = &sema;
-  sl.time_to_wake_up = start+ticks;
-  enum intr_level old_level = intr_disable ();
-  list_insert_ordered(&sleep_list,&sl.elem,compare,NULL);
-  intr_set_level (old_level);
-  sema_down(&sema);
-  /*
-  int64_t start = timer_ticks ();
-  while (timer_elapsed (start) < ticks) {
+  while (timer_elapsed (start) < ticks) 
     thread_yield ();
-    }
-  */
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -174,7 +136,6 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  timer_wakeup();
   thread_tick ();
 }
 

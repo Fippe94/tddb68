@@ -4,9 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "lib/kernel/bitmap.h"
-#include "filesys/file.h"
-#include "devices/timer.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -26,10 +23,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
-/* Size of the map */
-#define MAPSIZE 128
-
 
 /* A kernel thread or user process.
 
@@ -95,7 +88,6 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -103,34 +95,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-
-    struct bitmap *fdMap;
-    struct file* fdAddMap[MAPSIZE];
-    
-    struct child_status *cs;
-    struct list child_list;
-
-    int exit_status;
 #endif
-
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-  
-struct child_status{
-  struct semaphore sema;
-  int counter;
-  struct list_elem elem;
-  int exit_status;
-  bool start_success;
-  int tid;
-  char *args[32];
-  int arguments;
-  bool woke_parent;
-};
-
-struct list status_list;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

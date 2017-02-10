@@ -30,8 +30,8 @@ int main(void)
   binarydata[8] = 3;
   binarydata[9] = 4;
 
-  write(STDOUT_FILENO, descr, strlen(descr));
-  write(STDOUT_FILENO, test1, strlen(test1));
+  //write(STDOUT_FILENO, descr, strlen(descr));
+  //write(STDOUT_FILENO, test1, strlen(test1));
   if (!create("test0", strlen(test3))) {
     printf("Could not create test0\n");
     halt();

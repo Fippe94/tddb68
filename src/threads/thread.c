@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -87,12 +88,17 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init(&status_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  
+  initial_thread->exit_status = -1;
+
+  list_init(&initial_thread->child_list);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -129,6 +135,7 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -174,6 +181,8 @@ thread_create (const char *name, int priority,
   if (t == NULL)
     return TID_ERROR;
 
+ 
+
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
@@ -191,10 +200,28 @@ thread_create (const char *name, int priority,
   /* Stack frame for switch_threads(). */
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
+	  printf("[%s:%s:%d:%s] Hello world!\n", __FILE__, __FUNCTION__, __LINE__, thread_name());
+
+  #ifdef USERPROG
+  t->fdMap = bitmap_create(MAPSIZE);
+  t->cs = malloc(sizeof(struct child_status));
+  t->cs->counter = 1;
+  t->cs->tid = tid;
+  t->cs->exit_status = -1;
+  t->cs->woke_parent = false;
+  sema_init(&t->cs->sema,0);
+
+  t->exit_status = -1;
+  
+  list_init(&t->child_list);
+  list_push_back(&status_list,&t->cs->elem);
+  #endif
 
   /* Add to run queue. */
   thread_unblock (t);
 
+  
+  printf("[%s:%s:%d:%i] Hello world!\n", __FILE__, __FUNCTION__, __LINE__, t->tid);
   return tid;
 }
 
@@ -275,9 +302,31 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-
+  struct thread *t = thread_current();
 #ifdef USERPROG
+  sema_up(&t->cs->sema);
+  if (--t->cs->counter == 0){
+    free(t->cs);
+  }
+  struct list_elem *e;
+  for (e = list_begin(&t->child_list); e != list_end(&t->child_list);){
+    struct child_status *cs = list_entry(e,struct child_status,elem);
+    e = list_next(e);
+    if (--cs->counter == 0){
+      free(cs);
+    }
+  }
   process_exit ();
+  int i;
+  if (thread_current()->fdMap != NULL)
+    {
+      for (i = 0; i < MAPSIZE; i++){
+	if (bitmap_test(thread_current()->fdMap,i)){
+	  file_close(thread_current()->fdAddMap[i]);
+	} 
+      }
+    }
+  bitmap_destroy(thread_current()->fdMap);
 #endif
 
   /* Just set our status to dying and schedule another process.
